@@ -6,7 +6,7 @@
 //! [BBS+]: https://mattrglobal.github.io/bbs-signatures-spec/
 use bbs::prelude::*;
 use pairing_plus::{
-    bls12_381::{Bls12, Fr, G1, G2},
+    bls12_381::{Bls12, Fr, G1, G2, G1Uncompressed},
     hash_to_field::BaseFromRO,
     serdes::SerDes,
     CurveProjective,
@@ -343,4 +343,10 @@ fn gen_sk(msg: &[u8]) -> Fr {
             .is_ok()
     );
     Fr::from_okm(&result)
+}
+
+fn point_to_octets_g1(p: G1) -> G1Uncompressed {
+    use pairing_plus::EncodedPoint;
+    let p_affine = p.into_affine();
+    return G1Uncompressed::from_affine(p_affine);
 }
