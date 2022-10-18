@@ -329,7 +329,7 @@ fn bls_generate_keypair<G: CurveProjective<Engine = Bls12, Scalar = Fr> + SerDes
 }
 
 fn gen_sk(msg: &[u8]) -> Fr {
-    use sha2_old::digest::generic_array::{typenum::U48, GenericArray};
+    use digest_old::generic_array::{typenum::U48, GenericArray};
     const SALT: &[u8] = b"BLS-SIG-KEYGEN-SALT-";
     // copy of `msg` with appended zero byte
     let mut msg_prime = Vec::<u8>::with_capacity(msg.as_ref().len() + 1);
@@ -338,7 +338,7 @@ fn gen_sk(msg: &[u8]) -> Fr {
     // `result` has enough length to hold the output from HKDF expansion
     let mut result = GenericArray::<u8, U48>::default();
     assert!(
-        hkdf::Hkdf::<sha2_old::Sha256>::new(Some(SALT), &msg_prime[..])
+        hkdf::Hkdf::<sha2::Sha256>::new(Some(SALT), &msg_prime[..])
             .expand(&[0, 48], &mut result)
             .is_ok()
     );
