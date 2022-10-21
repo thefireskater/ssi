@@ -345,8 +345,56 @@ fn gen_sk(msg: &[u8]) -> Fr {
     Fr::from_okm(&result)
 }
 
-fn point_to_octets_g1(p: G1) -> G1Uncompressed {
+pub fn point_to_octets_g1(p: G1) -> G1Uncompressed {
     use pairing_plus::EncodedPoint;
     let p_affine = p.into_affine();
     return G1Uncompressed::from_affine(p_affine);
+}
+
+fn g_coeff(curr_pow: u64, remaining: u64) -> u8 {
+    let mut result: u8 = 255;
+    while curr_pow * (result as u64) > remaining {
+        result -= 1;
+    }
+    result
+}
+
+pub fn i2osp(x: u64) -> [u8; 8] {
+    let mut result: [u8; 8] = [0, 0, 0, 0, 0, 0, 0, 0];
+
+    let mut remaining: u64 = x;
+    let mut r = 7;
+    while r >= 0 {
+        let curr_pow = 256u64.pow(r as u32);
+
+        if curr_pow < remaining {
+            let coeff: u8 = g_coeff(curr_pow, remaining);
+            let curr_index: usize = (8 - r - 1) as usize;
+            result[curr_index] = coeff;
+            remaining -= (coeff as u64) * curr_pow;
+        }
+
+        r -= 1;
+    }
+
+    result
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_i2osp() {
+        let actual: [u8; 8] = i2osp(67109640u64);
+        let expected: [u8; 8] = [0, 0, 0, 0, 4, 0, 3, 8];
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn test_g_coeff() {
+        let expected = 3u8;
+        let actual = g_coeff(16777216, 50331748);
+        assert_eq!(actual, expected);
+    }
 }
