@@ -6,7 +6,7 @@
 //! [BBS+]: https://mattrglobal.github.io/bbs-signatures-spec/
 use bbs::prelude::*;
 use pairing_plus::{
-    bls12_381::{Bls12, Fr, G1, G2, G1Uncompressed},
+    bls12_381::{Bls12, Fr, G1Uncompressed, G2Uncompressed, G1, G2},
     hash_to_field::BaseFromRO,
     serdes::SerDes,
     CurveProjective,
@@ -337,11 +337,9 @@ fn gen_sk(msg: &[u8]) -> Fr {
     msg_prime.extend_from_slice(&[0]);
     // `result` has enough length to hold the output from HKDF expansion
     let mut result = GenericArray::<u8, U48>::default();
-    assert!(
-        hkdf::Hkdf::<sha2::Sha256>::new(Some(SALT), &msg_prime[..])
-            .expand(&[0, 48], &mut result)
-            .is_ok()
-    );
+    assert!(hkdf::Hkdf::<sha2::Sha256>::new(Some(SALT), &msg_prime[..])
+        .expand(&[0, 48], &mut result)
+        .is_ok());
     Fr::from_okm(&result)
 }
 
@@ -349,6 +347,12 @@ pub fn point_to_octets_g1(p: G1) -> G1Uncompressed {
     use pairing_plus::EncodedPoint;
     let p_affine = p.into_affine();
     return G1Uncompressed::from_affine(p_affine);
+}
+
+pub fn point_to_octets_g2(p: G2) -> G2Uncompressed {
+    use pairing_plus::EncodedPoint;
+    let p_affine = p.into_affine();
+    return G2Uncompressed::from_affine(p_affine);
 }
 
 fn g_coeff(curr_pow: u64, remaining: u64) -> u8 {
@@ -359,10 +363,10 @@ fn g_coeff(curr_pow: u64, remaining: u64) -> u8 {
     result
 }
 
-pub fn i2osp(x: u64) -> [u8; 8] {
+pub fn i2osp(x: &u64) -> [u8; 8] {
     let mut result: [u8; 8] = [0, 0, 0, 0, 0, 0, 0, 0];
 
-    let mut remaining: u64 = x;
+    let mut remaining: u64 = *x;
     let mut r = 7;
     while r >= 0 {
         let curr_pow = 256u64.pow(r as u32);
@@ -378,6 +382,58 @@ pub fn i2osp(x: u64) -> [u8; 8] {
     }
 
     result
+}
+
+pub struct Encoder {
+    pub encoded_data: Vec<u8>
+}
+
+pub trait Encode {
+    fn push_g1_point(&mut self, x: G1);
+    fn push_g2_point(&mut self, x: G2);
+    fn push_whole_number(&mut self, x: &u64);
+    fn push_ascii_string(&mut self, x: &String);
+    fn push_octet_string(&mut self, x: &[u8]);
+}
+
+impl Encode for Encoder {
+    fn push_g1_point(&mut self, x: G1) {
+        let g1_uncompressed = point_to_octets_g1(x);
+        let octets: &[u8] = g1_uncompressed.as_ref();
+        for i in 0..octets.len() {
+            self.encoded_data.push(octets[i]);
+        }
+    }
+
+    fn push_g2_point(&mut self, x: G2) {
+        let g2_uncompressed = point_to_octets_g2(x);
+        let octets: &[u8] = g2_uncompressed.as_ref();
+        for i in 0..octets.len() {
+            self.encoded_data.push(octets[i]);
+        }
+    }
+
+    fn push_whole_number(&mut self, x: &u64) {
+        let encoded = i2osp(&x);
+
+        for i in 0..8 {
+            self.encoded_data.push(encoded[i]);
+        }
+    }
+
+    fn push_ascii_string(&mut self, x: &String) {
+        let x_bytes = x.as_bytes();
+
+        for i in 0..x_bytes.len() {
+            self.encoded_data.push(x_bytes[i]);
+        }
+    }
+
+    fn push_octet_string(&mut self, x: &[u8]) {
+        for i in 0..x.len() {
+            self.encoded_data.push(x[i]);
+        }
+    }
 }
 
 #[cfg(test)]
