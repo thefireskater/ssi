@@ -20,6 +20,7 @@ use serde::{
 use std::fmt::Formatter;
 use thiserror::Error;
 use zeroize::Zeroize;
+use hex;
 
 /// This shows how the generators are created with nothing up my sleeve values
 /// ```ignore
@@ -396,6 +397,7 @@ pub trait Encode {
     fn push_ciphersuite_id(&mut self, x: &String);
     fn push_public_key(&mut self, x: &[u8]);
     fn push_octet_string(&mut self, x: &[u8]);
+    fn get_octet_string(&self) -> String;
 }
 
 impl Encode for Encoder {
@@ -431,7 +433,6 @@ impl Encode for Encoder {
         for i in 1..8 {
             self.encoded_data.push(encoded_length[i]);
         }
-
         for i in 0..x_bytes.len() {
             self.encoded_data.push(x_bytes[i]);
         }
@@ -461,6 +462,10 @@ impl Encode for Encoder {
         for i in 0..x.len() {
             self.encoded_data.push(x[i]);
         }
+    }
+
+    fn get_octet_string(&self) -> String {
+        return hex::encode(&self.encoded_data);
     }
 }
 
