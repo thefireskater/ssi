@@ -430,6 +430,12 @@ impl Encode for Encoder {
     }
 
     fn push_octet_string(&mut self, x: &[u8]) {
+        let x_length = x.len() as u64;
+        let encoded_length = i2osp(&x_length);
+        for i in 1..8 {
+            self.encoded_data.push(encoded_length[i]);
+        }
+
         for i in 0..x.len() {
             self.encoded_data.push(x[i]);
         }
