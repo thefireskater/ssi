@@ -424,6 +424,12 @@ impl Encode for Encoder {
     fn push_ascii_string(&mut self, x: &String) {
         let x_bytes = x.as_bytes();
 
+        let x_length = x_bytes.len() as u64;
+        let encoded_length = i2osp(&x_length);
+        for i in 1..8 {
+            self.encoded_data.push(encoded_length[i]);
+        }
+
         for i in 0..x_bytes.len() {
             self.encoded_data.push(x_bytes[i]);
         }
