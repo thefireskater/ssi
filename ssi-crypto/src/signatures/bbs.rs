@@ -393,6 +393,8 @@ pub trait Encode {
     fn push_g2_point(&mut self, x: G2);
     fn push_whole_number(&mut self, x: &u64);
     fn push_ascii_string(&mut self, x: &String);
+    fn push_ciphersuite_id(&mut self, x: &String);
+    fn push_public_key(&mut self, x: &[u8]);
     fn push_octet_string(&mut self, x: &[u8]);
 }
 
@@ -435,6 +437,14 @@ impl Encode for Encoder {
         }
     }
 
+    fn push_ciphersuite_id(&mut self, x: &String) {
+        let x_bytes = x.as_bytes();
+
+        for i in 0..x_bytes.len() {
+            self.encoded_data.push(x_bytes[i]);
+        }
+    }
+
     fn push_octet_string(&mut self, x: &[u8]) {
         let x_length = x.len() as u64;
         let encoded_length = i2osp(&x_length);
@@ -442,6 +452,12 @@ impl Encode for Encoder {
             self.encoded_data.push(encoded_length[i]);
         }
 
+        for i in 0..x.len() {
+            self.encoded_data.push(x[i]);
+        }
+    }
+
+    fn push_public_key(&mut self, x: &[u8]) {
         for i in 0..x.len() {
             self.encoded_data.push(x[i]);
         }
