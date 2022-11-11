@@ -159,8 +159,21 @@ impl LinkedDataDocument for Proof {
             Some(parent) => parent.get_contexts()?,
             None => None,
         };
-        let dataset =
-            json_to_dataset(&json, more_contexts.as_ref(), false, None, context_loader).await?;
+
+        let stable_blank_node_labels = match copy.type_.as_str() {
+            "BbsBlsSignatureProof2020" => true,
+            _ => false,
+        };
+
+        let dataset = json_to_dataset(
+            &json,
+            more_contexts.as_ref(),
+            false,
+            None,
+            context_loader,
+            stable_blank_node_labels,
+        )
+        .await?;
         verify_proof_consistency(self, &dataset)?;
         Ok(dataset)
     }
@@ -303,6 +316,7 @@ fn verify_proof_consistency(proof: &Proof, dataset: &DataSet) -> Result<(), Erro
         ("TezosJcsSignature2021", "https://w3id.org/security#TezosJcsSignature2021") => (),
         ("AleoSignature2021", "https://w3id.org/security#AleoSignature2021") => (),
         ("SolanaSignature2021", "https://w3id.org/security#SolanaSignature2021") => (),
+        ("BbsBlsSignatureProof2020", "https://w3id.org/security#BbsBlsSignatureProof2020") => (),
         _ => return Err(Error::JsonLd(JsonLdError::UnexpectedTriple(type_triple.clone()))),
     };
     let proof_id = &type_triple.subject;
