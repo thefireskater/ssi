@@ -7,6 +7,7 @@ use std::result::Result;
 use zeroize::Zeroize;
 pub mod error;
 pub use error::Error;
+use bbs::prelude::*;
 
 #[cfg(feature = "ripemd-160")]
 pub mod ripemd160;
@@ -335,6 +336,14 @@ impl JWK {
     #[cfg(feature = "aleo")]
     pub fn generate_aleo() -> Result<JWK, Error> {
         crate::aleo::generate_private_key_jwk().map_err(Error::AleoGeneratePrivateKey)
+    }
+
+    //#[cfg(feature = "bbs")]
+    pub fn generate_bls12381_2020() -> Option<String> {
+        let (pk, sk) = Issuer::new_keys(5).unwrap();
+        let pk_bytes = pk.to_bytes_compressed_form();
+        let result = String::from(Base64urlUInt(pk_bytes));
+        return Some(result);
     }
 
     pub fn get_algorithm(&self) -> Option<Algorithm> {
