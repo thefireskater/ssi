@@ -1,5 +1,4 @@
 #![cfg_attr(docsrs, feature(doc_auto_cfg))]
-
 // TODO reinstate Error::MissingFeatures ?
 
 pub mod error;
@@ -8,6 +7,7 @@ use serde::{Deserialize, Serialize};
 use ssi_jwk::{Algorithm, Base64urlUInt, Params as JWKParams, JWK};
 use std::collections::BTreeMap;
 use std::convert::TryFrom;
+use bbs::prelude::*;
 
 pub type VerificationWarnings = Vec<String>;
 
@@ -219,6 +219,15 @@ pub fn sign_bytes(algorithm: Algorithm, data: &[u8], key: &JWK) -> Result<Vec<u8
                     let sig: k256::ecdsa::Signature = signing_key
                         .try_sign_digest(<blake2::Blake2b<U32> as Digest>::new_with_prefix(data))?;
                     sig.as_bytes().to_vec()
+                }
+                Algorithm::BLS12381 => {
+                    // this section stillneeds some work, get public, private key from JWK
+                    println!("sign_bytes, BLS12-381");
+                    let messages = vec![SignatureMessage::hash(data)];
+
+                    let (pk, sk) = Issuer::new_keys(1).unwrap();
+                    let signature = Signature::new(messages.as_slice(), &sk, &pk).unwrap();
+                    signature.to_bytes_compressed_form().to_vec()
                 }
                 _ => {
                     return Err(Error::UnsupportedAlgorithm);

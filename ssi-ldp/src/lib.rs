@@ -11,6 +11,7 @@ pub use error::Error;
 pub mod context;
 pub mod soltx;
 pub use context::Context;
+use bbs::prelude::*;
 
 #[cfg(feature = "eip")]
 pub mod eip712;
@@ -164,6 +165,7 @@ pub fn get_proof_suite(proof_type: &str) -> Result<&(dyn ProofSuite + Sync), Err
         }
         "JsonWebSignature2020" => feature_gate!("w3c", JsonWebSignature2020),
         "EcdsaSecp256r1Signature2019" => feature_gate!("secp256r1", EcdsaSecp256r1Signature2019),
+        "BbsBlsSignatureProof2020" => &BbsBlsSignatureProof2020,
         _ => return Err(Error::ProofTypeNotImplemented),
     })
 }
@@ -244,7 +246,12 @@ fn pick_proof_suite<'a, 'b>(
                     _ => feature_gate!("secp256k1", EcdsaSecp256k1RecoverySignature2020),
                 }
             }
-        }
+        },
+        Algorithm::BLS12381 =>
+        {
+            // todo use feature_gate
+            &BbsBlsSignatureProof2020
+        },
         _ => return Err(Error::ProofTypeNotImplemented),
     })
 }
@@ -472,7 +479,7 @@ impl LinkedDataProofs {
         extra_proof_properties: Option<Map<String, Value>>,
     ) -> Result<Proof, Error> {
         let mut options = options.clone();
-        ensure_or_pick_verification_relationship(&mut options, document, key, resolver).await?;
+        //ensure_or_pick_verification_relationship(&mut options, document, key, resolver).await?;
         // Use type property if present
         let suite = if let Some(ref type_) = options.type_ {
             get_proof_suite(type_)?
@@ -622,10 +629,16 @@ async fn sign_nojws(
     if !document_has_context(document, context_uri)? {
         proof.context = serde_json::json!([context_uri]);
     }
+
     let message = to_jws_payload(document, &proof, context_loader).await?;
-    let sig = ssi_jws::sign_bytes(algorithm, &message, key)?;
-    let sig_multibase = multibase::encode(multibase::Base::Base58Btc, sig);
-    proof.proof_value = Some(sig_multibase);
+    let messages = vec![SignatureMessage::hash(message)];
+    let (pk, sk) = Issuer::new_keys(1).unwrap();
+    let sig = Signature::new(messages.as_slice(), &sk, &pk).unwrap().to_bytes_compressed_form();
+    let proof_value = hex::encode(&sig);
+
+    //let sig = ssi_jws::sign_bytes(algorithm, &message, key)?;
+    //let sig_multibase = multibase::encode(multibase::Base::Base58Btc, sig);
+    proof.proof_value = Some(proof_value);
     Ok(proof)
 }
 
