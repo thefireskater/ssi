@@ -340,11 +340,18 @@ impl JWK {
     }
 
     //#[cfg(feature = "bbs")]
-    pub fn generate_bls12381_2020() -> Option<String> {
+    pub fn generate_bls12381_2020() -> Result<JWK, Error> {
         let (pk, sk) = Issuer::new_keys(1).unwrap();
         let pk_bytes = pk.to_bytes_compressed_form();
-        let result = String::from(Base64urlUInt(pk_bytes));
-        return Some(result);
+        let sk_bytes = sk.to_bytes_compressed_form().to_vec();
+
+        let params = Params::OKP(OctetParams {
+            curve: "Bls12381G2".to_string(),
+            public_key: Base64urlUInt(pk_bytes),
+            private_key: Some(Base64urlUInt(sk_bytes))
+        });
+
+        Ok(JWK::from(params))
     }
 
     pub fn get_algorithm(&self) -> Option<Algorithm> {
