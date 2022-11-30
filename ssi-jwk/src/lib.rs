@@ -256,7 +256,7 @@ pub enum Algorithm {
     ESKeccakKR,
     ESBlake2b,
     ESBlake2bK,
-    BLS12381,
+    BLS12381G2,
     #[doc(hidden)]
     AleoTestnet1Signature,
     // Per the specs it should only be `none` but `None` is kept for backwards compatibility
@@ -366,6 +366,9 @@ impl JWK {
             Params::OKP(okp_params) if okp_params.curve == "Ed25519" => {
                 return Some(Algorithm::EdDSA);
             }
+            Params::OKP(okp_params) if okp_params.curve == "Bls12381G2" => {
+                return Some(Algorithm::BLS12381G2);
+            }
             #[cfg(feature = "aleo")]
             Params::OKP(okp_params) if okp_params.curve == crate::aleo::OKP_CURVE => {
                 return Some(Algorithm::AleoTestnet1Signature);
@@ -384,9 +387,6 @@ impl JWK {
                     }
                     "P-384" => {
                         return Some(Algorithm::ES384);
-                    }
-                    "BLS12-381" => {
-                        return Some(Algorithm::BLS12381)
                     }
                     _ => {}
                 }
