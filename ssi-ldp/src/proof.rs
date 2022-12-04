@@ -303,6 +303,7 @@ fn verify_proof_consistency(proof: &Proof, dataset: &DataSet) -> Result<(), Erro
         ("TezosJcsSignature2021", "https://w3id.org/security#TezosJcsSignature2021") => (),
         ("AleoSignature2021", "https://w3id.org/security#AleoSignature2021") => (),
         ("SolanaSignature2021", "https://w3id.org/security#SolanaSignature2021") => (),
+        ("BbsBlsSignatureProof2020", "https://w3id.org/security#BbsBlsSignatureProof2020") => (),
         _ => return Err(Error::JsonLd(JsonLdError::UnexpectedTriple(type_triple.clone()))),
     };
     let proof_id = &type_triple.subject;

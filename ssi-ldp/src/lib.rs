@@ -11,7 +11,6 @@ pub use error::Error;
 pub mod context;
 pub mod soltx;
 pub use context::Context;
-use bbs::prelude::*;
 
 #[cfg(feature = "eip")]
 pub mod eip712;
@@ -247,7 +246,7 @@ fn pick_proof_suite<'a, 'b>(
                 }
             }
         },
-        Algorithm::BLS12381 =>
+        Algorithm::BLS12381G2 =>
         {
             // todo use feature_gate
             &BbsBlsSignatureProof2020
@@ -631,14 +630,9 @@ async fn sign_nojws(
     }
 
     let message = to_jws_payload(document, &proof, context_loader).await?;
-    let messages = vec![SignatureMessage::hash(message)];
-    let (pk, sk) = Issuer::new_keys(1).unwrap();
-    let sig = Signature::new(messages.as_slice(), &sk, &pk).unwrap().to_bytes_compressed_form();
-    let proof_value = hex::encode(&sig);
-
-    //let sig = ssi_jws::sign_bytes(algorithm, &message, key)?;
-    //let sig_multibase = multibase::encode(multibase::Base::Base58Btc, sig);
-    proof.proof_value = Some(proof_value);
+    let sig = ssi_jws::sign_bytes(algorithm, &message, key)?;
+    let sig_multibase = multibase::encode(multibase::Base::Base58Btc, sig);
+    proof.proof_value = Some(sig_multibase);
     Ok(proof)
 }
 

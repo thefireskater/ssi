@@ -5,7 +5,6 @@ use ssi_dids::did_resolve::{resolve_key, resolve_vm, DIDResolver};
 use ssi_json_ld::ContextLoader;
 use ssi_jwk::{Algorithm, Params as JWKParams, JWK};
 use std::collections::HashMap as Map;
-use bbs::prelude::*;
 
 #[cfg(feature = "rsa")]
 pub struct RsaSignature2018;
@@ -583,6 +582,10 @@ impl JsonWebSignature2020 {
                     Algorithm::EdDSA => (),
                     _ => return Err(Error::JWS(ssi_jws::Error::UnsupportedAlgorithm)),
                 },
+                "Bls12381G2" => match algorithm {
+                    Algorithm::BLS12381G2 => (),
+                    _ => return Err(Error::JWS(ssi_jws::Error::UnsupportedAlgorithm)),
+                },
                 _ => {
                     return Err(Error::UnsupportedCurve);
                 }
@@ -614,8 +617,8 @@ impl ProofSuite for BbsBlsSignatureProof2020 {
             resolver,
             context_loader,
             key,
-            "BbsBlsSignatureProof2022",
-            Algorithm::BLS12381,
+            "BbsBlsSignatureProof2020",
+            Algorithm::BLS12381G2,
             extra_proof_properties,
         )
         .await

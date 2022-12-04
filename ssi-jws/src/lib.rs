@@ -116,10 +116,10 @@ pub fn sign_bytes(algorithm: Algorithm, data: &[u8], key: &JWK) -> Result<Vec<u8
         #[cfg(any(feature = "ring", feature = "ed25519"))]
         JWKParams::OKP(okp) => {
             use blake2::digest::{consts::U32, Digest};
-            if algorithm != Algorithm::EdDSA && algorithm != Algorithm::EdBlake2b {
+            if algorithm != Algorithm::EdDSA && algorithm != Algorithm::EdBlake2b && algorithm != Algorithm::BLS12381G2 {
                 return Err(Error::UnsupportedAlgorithm);
             }
-            if okp.curve != *"Ed25519" {
+            if okp.curve != *"Ed25519" && okp.curve != *"Bls12381G2" {
                 return Err(ssi_jwk::Error::CurveNotImplemented(okp.curve.to_string()).into());
             }
             let hash = match algorithm {
@@ -128,17 +128,33 @@ pub fn sign_bytes(algorithm: Algorithm, data: &[u8], key: &JWK) -> Result<Vec<u8
                     .to_vec(),
                 _ => data.to_vec(),
             };
-            #[cfg(feature = "ring")]
-            {
-                let key_pair = ring::signature::Ed25519KeyPair::try_from(okp)?;
-                key_pair.sign(&hash).as_ref().to_vec()
-            }
-            // TODO: SymmetricParams
-            #[cfg(all(feature = "ed25519", not(feature = "ring")))]
-            {
-                let keypair = ed25519_dalek::Keypair::try_from(okp)?;
-                use ed25519_dalek::Signer;
-                keypair.sign(&hash).to_bytes().to_vec()
+
+            match algorithm {
+                Algorithm::BLS12381G2 => {
+                    let messages = vec![SignatureMessage::hash(data)];
+
+                    let Base64urlUInt(pk_bytes) = &okp.public_key;
+                    let Base64urlUInt(sk_bytes) = okp.private_key.as_ref().unwrap();
+                    let pk = bbs::prelude::PublicKey::try_from(pk_bytes.as_slice()).unwrap();
+                    let sk = bbs::prelude::SecretKey::try_from(sk_bytes.as_slice()).unwrap();
+
+                    let signature = Signature::new(messages.as_slice(), &sk, &pk).unwrap();
+                    signature.to_bytes_compressed_form().to_vec()
+                },
+                _ => {
+                    #[cfg(feature = "ring")]
+                    {
+                        let key_pair = ring::signature::Ed25519KeyPair::try_from(okp)?;
+                        key_pair.sign(&hash).as_ref().to_vec()
+                    }
+                    // TODO: SymmetricParams
+                    #[cfg(all(feature = "ed25519", not(feature = "ring")))]
+                    {  // this is where it's failing
+                        let keypair = ed25519_dalek::Keypair::try_from(okp)?;
+                        use ed25519_dalek::Signer;
+                        keypair.sign(&hash).to_bytes().to_vec()
+                    }
+                }
             }
         }
         #[allow(unused)]
@@ -220,15 +236,6 @@ pub fn sign_bytes(algorithm: Algorithm, data: &[u8], key: &JWK) -> Result<Vec<u8
                         .try_sign_digest(<blake2::Blake2b<U32> as Digest>::new_with_prefix(data))?;
                     sig.as_bytes().to_vec()
                 }
-                Algorithm::BLS12381 => {
-                    // this section stillneeds some work, get public, private key from JWK
-                    println!("sign_bytes, BLS12-381");
-                    let messages = vec![SignatureMessage::hash(data)];
-
-                    let (pk, sk) = Issuer::new_keys(1).unwrap();
-                    let signature = Signature::new(messages.as_slice(), &sk, &pk).unwrap();
-                    signature.to_bytes_compressed_form().to_vec()
-                }
                 _ => {
                     return Err(Error::UnsupportedAlgorithm);
                 }
@@ -306,7 +313,7 @@ pub fn verify_bytes_warnable(
         #[cfg(any(feature = "ring", feature = "ed25519"))]
         JWKParams::OKP(okp) => {
             use blake2::digest::{consts::U32, Digest};
-            if okp.curve != *"Ed25519" {
+            if okp.curve != *"Ed25519" && okp.curve != *"Bls12381G2" {
                 return Err(ssi_jwk::Error::CurveNotImplemented(okp.curve.to_string()).into());
             }
             let hash = match algorithm {
