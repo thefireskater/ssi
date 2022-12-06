@@ -3,7 +3,7 @@ use async_trait::async_trait;
 use serde_json::Value;
 use ssi_dids::did_resolve::{resolve_key, resolve_vm, DIDResolver};
 use ssi_json_ld::ContextLoader;
-use ssi_jwk::{Algorithm, Params as JWKParams, JWK};
+use ssi_jwk::{Algorithm, Params as JWKParams, JWK, OctetParams};
 use std::collections::HashMap as Map;
 
 #[cfg(feature = "rsa")]
@@ -655,8 +655,7 @@ impl ProofSuite for BbsBlsSignatureProof2020 {
         resolver: &dyn DIDResolver,
         context_loader: &mut ContextLoader,
     ) -> Result<VerificationWarnings, Error> {
-        unimplemented!();
-        /*let jws = proof.jws.as_ref().ok_or(Error::MissingProofSignature)?;
+        let jws = proof.jws.as_ref().ok_or(Error::MissingProofSignature)?;
         let verification_method = proof
             .verification_method
             .as_ref()
@@ -670,15 +669,17 @@ impl ProofSuite for BbsBlsSignatureProof2020 {
             signature,
         } = ssi_jws::decode_jws_parts(header_b64, &message, signature_b64)?;
         // Redundant early algorithm check before expensive key lookup and signature verification.
-        self.validate_algorithm(header.algorithm)?;
+        // todo bring below back
+        //self.validate_algorithm(header.algorithm)?; 
         let key = resolve_key(verification_method, resolver).await?;
-        self.validate_key_and_algorithm(&key, header.algorithm)?;
+        // todo bring below back
+        //self.validate_key_and_algorithm(&key, header.algorithm)?;
         Ok(ssi_jws::verify_bytes_warnable(
             header.algorithm,
             &signing_input,
             &key,
             &signature,
-        )?)*/
+        )?)
     }
     async fn complete(
         &self,

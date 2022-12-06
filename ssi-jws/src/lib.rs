@@ -322,22 +322,47 @@ pub fn verify_bytes_warnable(
                     .to_vec(),
                 _ => data.to_vec(),
             };
-            #[cfg(feature = "ring")]
-            {
-                use ring::signature::UnparsedPublicKey;
-                let verification_algorithm = &ring::signature::ED25519;
-                let public_key = UnparsedPublicKey::new(verification_algorithm, &okp.public_key.0);
-                public_key.verify(&hash, signature)?;
-            }
-            #[cfg(feature = "ed25519")]
-            {
-                use ed25519_dalek::Verifier;
-                let public_key = ed25519_dalek::PublicKey::try_from(okp)?;
-                let signature = ed25519_dalek::Signature::from_bytes(signature)
-                    .map_err(ssi_jwk::Error::from)?;
-                public_key
-                    .verify(&hash, &signature)
-                    .map_err(ssi_jwk::Error::from)?;
+            match algorithm {
+                Algorithm::BLS12381G2 => {
+                    match &key.params {
+                        JWKParams::OKP(okp) => {
+                            if signature.len() != 112 {
+                                return Err(Error::InvalidSignature);
+                            }
+                            let mut signature_sized: [u8; 112] = [0; 112];
+                            signature_sized.clone_from_slice(signature);
+                            let bbs_sig = bbs::prelude::Signature::from(&signature_sized);
+
+                            let messages = vec![SignatureMessage::hash(hash)];
+                            let Base64urlUInt(pk_bytes) = &okp.public_key;
+                            let pk = bbs::prelude::PublicKey::try_from(pk_bytes.as_slice()).unwrap();
+                            let result = bbs_sig.verify(messages.as_slice(), &pk).unwrap();
+                            if !result {
+                                return Err(Error::InvalidSignature);
+                            }
+                        },
+                        _ => (),
+                    }
+                },
+                _ => {
+                    #[cfg(feature = "ring")]
+                    {
+                        use ring::signature::UnparsedPublicKey;
+                        let verification_algorithm = &ring::signature::ED25519;
+                        let public_key = UnparsedPublicKey::new(verification_algorithm, &okp.public_key.0);
+                        public_key.verify(&hash, signature)?;
+                    }
+                    #[cfg(feature = "ed25519")]
+                    {
+                        use ed25519_dalek::Verifier;
+                        let public_key = ed25519_dalek::PublicKey::try_from(okp)?;
+                        let signature = ed25519_dalek::Signature::from_bytes(signature)
+                            .map_err(ssi_jwk::Error::from)?;
+                        public_key
+                            .verify(&hash, &signature)
+                            .map_err(ssi_jwk::Error::from)?;
+                    }
+                }
             }
         }
         #[allow(unused)]
