@@ -24,7 +24,7 @@ use ssi_dids::did_resolve::{resolve_key, DIDResolver};
 use ssi_dids::VerificationRelationship as ProofPurpose;
 use ssi_json_ld::{rdf::DataSet, urdna2015, ContextLoader};
 use ssi_jwk::{Algorithm, Base64urlUInt, JWK};
-use ssi_jws::Header;
+use ssi_jws::{Header, JWSPayload};
 
 pub mod suites;
 pub use suites::*;
@@ -571,6 +571,34 @@ async fn to_jws_payload(
     Ok(data)
 }
 
+async fn to_jws_payload_v2(
+    document: &(dyn LinkedDataDocument + Sync),
+    proof: &Proof,
+    context_loader: &mut ContextLoader,
+) -> Result<JWSPayload, Error> {
+    let mut payload = JWSPayload {
+        header: String::new(),
+        messages: Vec::new(),
+        sigopts_digest: [0; 32]
+    };
+
+    let sigopts_dataset = proof
+        .to_dataset_for_signing(Some(document), context_loader)
+        .await?;
+    let sigopts_dataset_normalized = urdna2015::normalize(&sigopts_dataset)?;
+    let sigopts_normalized = sigopts_dataset_normalized.to_nquads()?;
+    payload.sigopts_digest = sha256(sigopts_normalized.as_bytes());
+
+    let doc_dataset = document
+        .to_dataset_for_signing(None, context_loader)
+        .await?;
+    let doc_dataset_normalized = urdna2015::normalize(&doc_dataset)?;
+    let doc_normalized = doc_dataset_normalized.to_nquads_vec()?;
+    payload.messages = doc_normalized;
+
+    Ok(payload)
+}
+
 #[allow(clippy::too_many_arguments)]
 async fn sign(
     document: &(dyn LinkedDataDocument + Sync),
@@ -590,7 +618,7 @@ async fn sign(
     let proof = Proof::new(type_)
         .with_options(options)
         .with_properties(extra_proof_properties);
-    sign_proof(document, proof, key, algorithm, context_loader).await
+    sign_proof_v2(document, proof, key, algorithm, context_loader).await
 }
 
 async fn sign_proof(
@@ -602,6 +630,19 @@ async fn sign_proof(
 ) -> Result<Proof, Error> {
     let message = to_jws_payload(document, &proof, context_loader).await?;
     let jws = ssi_jws::detached_sign_unencoded_payload(algorithm, &message, key)?;
+    proof.jws = Some(jws);
+    Ok(proof)
+}
+
+async fn sign_proof_v2(
+    document: &(dyn LinkedDataDocument + Sync),
+    mut proof: Proof,
+    key: &JWK,
+    algorithm: Algorithm,
+    context_loader: &mut ContextLoader,
+) -> Result<Proof, Error> {
+    let mut jws_payload = to_jws_payload_v2(document, &proof, context_loader).await?;
+    let jws = ssi_jws::detached_sign_unencoded_payload_v2(algorithm, &mut jws_payload, key)?;
     proof.jws = Some(jws);
     Ok(proof)
 }

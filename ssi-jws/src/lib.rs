@@ -8,6 +8,7 @@ use ssi_jwk::{Algorithm, Base64urlUInt, Params as JWKParams, JWK};
 use std::collections::BTreeMap;
 use std::convert::TryFrom;
 use bbs::prelude::*;
+use ssi_crypto::hashes::sha256::sha256;
 
 pub type VerificationWarnings = Vec<String>;
 
@@ -70,6 +71,39 @@ pub struct Header {
 fn base64_encode_json<T: Serialize>(object: &T) -> Result<String, Error> {
     let json = serde_json::to_string(&object)?;
     Ok(base64::encode_config(json, base64::URL_SAFE_NO_PAD))
+}
+
+pub fn sign_bytes_v2(algorithm: Algorithm, key: &JWK, payload: &JWSPayload) -> Result<Vec<u8>, Error> {
+    match &key.params {
+        JWKParams::OKP(okp) => {
+            match algorithm {
+                Algorithm::BLS12381G2 => {
+                    let mut messages: Vec<SignatureMessage> = Vec::new();
+                    messages.push(SignatureMessage::hash(payload.header.as_bytes()));
+                    messages.push(SignatureMessage::hash(payload.sigopts_digest.as_ref().to_vec()));
+
+                    for i in 0..payload.messages.len() {
+                        messages.push(SignatureMessage::hash(payload.messages[i].as_bytes()));
+                    }
+
+                    let Base64urlUInt(pk_bytes) = &okp.public_key;
+                    let Base64urlUInt(sk_bytes) = okp.private_key.as_ref().unwrap();
+                    let pk = bbs::prelude::PublicKey::try_from(pk_bytes.as_slice()).unwrap();
+                    let sk = bbs::prelude::SecretKey::try_from(sk_bytes.as_slice()).unwrap();
+
+                    let signature = Signature::new(messages.as_slice(), &sk, &pk).unwrap();
+                    return Ok(signature.to_bytes_compressed_form().to_vec());
+                },
+                _ => (),
+            }
+
+        },
+        _ => (),
+    }
+
+    let messages_str = payload.messages.join("");
+    let messages_hash = sha256(messages_str.as_bytes());
+    sign_bytes(algorithm, &messages_hash, key)
 }
 
 pub fn sign_bytes(algorithm: Algorithm, data: &[u8], key: &JWK) -> Result<Vec<u8>, Error> {
@@ -249,6 +283,12 @@ pub fn sign_bytes(algorithm: Algorithm, data: &[u8], key: &JWK) -> Result<Vec<u8
 
 pub fn sign_bytes_b64(algorithm: Algorithm, data: &[u8], key: &JWK) -> Result<String, Error> {
     let signature = sign_bytes(algorithm, data, key)?;
+    let sig_b64 = base64::encode_config(signature, base64::URL_SAFE_NO_PAD);
+    Ok(sig_b64)
+}
+
+pub fn sign_bytes_b64_v2(algorithm: Algorithm, key: &JWK, payload: &JWSPayload) -> Result<String, Error> {
+    let signature = sign_bytes_v2(algorithm, key, payload)?;
     let sig_b64 = base64::encode_config(signature, base64::URL_SAFE_NO_PAD);
     Ok(sig_b64)
 }
@@ -572,6 +612,25 @@ pub fn detached_sign_unencoded_payload(
     Ok(jws)
 }
 
+pub fn detached_sign_unencoded_payload_v2(
+    algorithm: Algorithm,
+    payload: &mut JWSPayload,
+    key: &JWK,
+) -> Result<String, Error> {
+    let header = Header {
+        algorithm,
+        key_id: key.key_id.clone(),
+        critical: Some(vec!["b64".to_string()]),
+        base64urlencode_payload: Some(false),
+        ..Default::default()
+    };
+    let header_b64 = base64_encode_json(&header)?;
+    payload.header = header_b64;
+    let sig_b64 = sign_bytes_b64_v2(header.algorithm, &key, payload)?;
+    let jws = payload.header.clone() + ".." + &sig_b64;
+    Ok(jws)
+}
+
 pub fn prepare_detached_unencoded_payload(
     algorithm: Algorithm,
     payload: &[u8],
@@ -649,6 +708,12 @@ pub struct DecodedJWS {
     pub signing_input: Vec<u8>,
     pub payload: Vec<u8>,
     pub signature: Vec<u8>,
+}
+
+pub struct JWSPayload {
+    pub header: String,
+    pub messages: Vec<String>,
+    pub sigopts_digest: [u8; 32]
 }
 
 /// Decode JWS parts (JOSE header, payload, and signature) into useful values.
