@@ -341,7 +341,7 @@ impl JWK {
 
     //#[cfg(feature = "bbs")]
     pub fn generate_bls12381_2020() -> Result<JWK, Error> {
-        let (pk, sk) = Issuer::new_keys(1).unwrap();
+        let (pk, sk) = Issuer::new_keys(100).unwrap();
         let pk_bytes = pk.to_bytes_compressed_form();
         let sk_bytes = sk.to_bytes_compressed_form().to_vec();
 
