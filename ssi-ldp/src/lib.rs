@@ -11,6 +11,7 @@ pub use error::Error;
 pub mod context;
 pub mod soltx;
 pub use context::Context;
+use bbs::prelude::*;
 
 #[cfg(feature = "eip")]
 pub mod eip712;
@@ -571,6 +572,104 @@ async fn to_jws_payload(
     Ok(data)
 }
 
+// todo: refactor, may want to move this to ssi-jws
+pub async fn generate_bbs_signature_pok(
+    document: &(dyn LinkedDataDocument + Sync),
+    nonce: &str,
+    proof: &Proof,
+    did_resolver: &dyn DIDResolver,
+    revealed_message_indices: &[usize]
+) -> Result<Proof, Error> {
+    let signature_with_header = proof.jws.as_ref().ok_or(Error::MissingProofSignature)?.as_str();
+    let verification_method = proof
+        .verification_method
+        .as_ref()
+        .ok_or(Error::MissingVerificationMethod)?
+        .as_str();
+
+    // this is where the JWK is coming from
+    let key = ssi_dids::did_resolve::resolve_key(verification_method, did_resolver).await?;
+
+    use ssi_jwk::{Params as JWKParams};
+    let pk = match &key.params {
+        JWKParams::OKP(okp) => {
+            let Base64urlUInt(pk_bytes) = &okp.public_key;
+            eprintln!("signature pok, pk bytes: {}", base64::encode(pk_bytes));
+            PublicKey::try_from(pk_bytes.as_slice()).unwrap()
+        },
+        _ => unimplemented!(),
+    };
+
+    let mut proof_without_jws = proof.clone();
+    proof_without_jws.jws = None;
+    let mut context_loader = ssi_json_ld::ContextLoader::default();
+    let payload = to_jws_payload_v2(document, &proof_without_jws, &mut context_loader).await?;
+    let (header, header_str) = ssi_jws::generate_header(Algorithm::BLS12381G2, &key).unwrap();
+    println!("Header: {}", &header_str);
+    println!("Signature with header: {}", signature_with_header);
+
+    let start_index = signature_with_header.find("..").unwrap() + 2;  // +2 for ..; todo: switch to ok_or
+    let signature_str = &signature_with_header[start_index..];
+
+    let signature_byte_vec = base64::decode_config(signature_str, base64::URL_SAFE_NO_PAD).unwrap();
+    assert!(signature_byte_vec.len() == 112, "Unexpected length for signature byte vector: {}", signature_byte_vec.len());
+    eprintln!("length of de-serialized signature vector: {}", signature_byte_vec.len());
+    let mut signature_bytes: [u8; 112] = [0; 112];
+    for i in 0..112 {
+        signature_bytes[i] = signature_byte_vec[i];
+    }
+    let signature = Signature::from(&signature_bytes);
+
+    use std::collections::HashSet;
+    let disclose_positions: HashSet<usize> = HashSet::from_iter(revealed_message_indices.iter().cloned());
+
+    let mut proof_messages: Vec<ProofMessage> = Vec::new();
+    proof_messages.push(bbs::pm_hidden!(header_str.as_bytes()));
+    eprintln!("signature pok, header: {}", &header_str);
+    let sigopts_str = base64::encode(&payload.sigopts_digest);
+    eprintln!("signature pok, sigopts: {}", sigopts_str.as_str());
+    proof_messages.push(bbs::pm_hidden!(payload.sigopts_digest.as_ref()));
+
+    eprintln!("signature pok, number of messages: {}", payload.messages.len());
+
+    for i in 0..payload.messages.len() {
+        let message_bytes = payload.messages[i].as_bytes();
+        eprintln!("signature, pok, message: {}, {}", &i, base64::encode(message_bytes));
+        if disclose_positions.contains(&i) {
+            let pm = bbs::pm_revealed!(message_bytes);
+            proof_messages.push(pm);
+        } else {
+            let pm = bbs::pm_hidden!(message_bytes);
+            proof_messages.push(pm);
+        }
+    }
+
+    let mut num_messages = payload.messages.len() + 2;
+    while num_messages < 100 {
+        proof_messages.push(bbs::pm_hidden!(b""));
+        num_messages += 1;
+    }
+
+    eprintln!("done building inputs, now doing signature pok");
+
+    // todo replace with actual disclosed message positions
+    let proof_request = Verifier::new_proof_request(revealed_message_indices, &pk).unwrap();
+    let pok = Prover::commit_signature_pok(&proof_request, proof_messages.as_slice(), &signature).unwrap();
+
+    let mut challenge_bytes = Vec::new();
+    challenge_bytes.extend_from_slice(pok.to_bytes().as_slice());
+    let nonce_bytes = base64::decode(nonce).unwrap();
+    challenge_bytes.extend_from_slice(nonce_bytes.as_slice());
+    eprintln!("size of challenge bytes: {}", challenge_bytes.len());
+
+    let challenge = ProofChallenge::hash(&challenge_bytes); 
+    let proof = Prover::generate_signature_pok(pok, &challenge).unwrap();
+
+    // todo: create a proof object
+        
+    unimplemented!();
+}
+
 async fn to_jws_payload_v2(
     document: &(dyn LinkedDataDocument + Sync),
     proof: &Proof,
@@ -594,10 +693,17 @@ async fn to_jws_payload_v2(
         .await?;
     let doc_dataset_normalized = urdna2015::normalize(&doc_dataset)?;
     let doc_normalized = doc_dataset_normalized.to_nquads_vec()?;
+
+    for i in 0..doc_normalized.len() {
+        eprintln!("n-quad: {} {}", &i, doc_normalized[i].as_str());
+    }
+
     payload.messages = doc_normalized;
 
     Ok(payload)
 }
+
+
 
 #[allow(clippy::too_many_arguments)]
 async fn sign(
@@ -615,6 +721,10 @@ async fn sign(
             return Err(Error::JWS(ssi_jws::Error::AlgorithmMismatch));
         }
     }
+    eprintln!("type: {}", type_);
+    let options_str = serde_json::to_string(options).unwrap();
+    eprintln!("options: {}", options_str.as_str());
+    // pretty sure extra_proof_properties is None in this case
     let proof = Proof::new(type_)
         .with_options(options)
         .with_properties(extra_proof_properties);

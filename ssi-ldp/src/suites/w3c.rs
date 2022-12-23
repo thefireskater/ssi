@@ -655,6 +655,7 @@ impl ProofSuite for BbsBlsSignatureProof2020 {
         resolver: &dyn DIDResolver,
         context_loader: &mut ContextLoader,
     ) -> Result<VerificationWarnings, Error> {
+        // todo: need to move to passing vector of message hashes, not a single byte array
         let jws = proof.jws.as_ref().ok_or(Error::MissingProofSignature)?;
         let verification_method = proof
             .verification_method

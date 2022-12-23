@@ -79,14 +79,28 @@ pub fn sign_bytes_v2(algorithm: Algorithm, key: &JWK, payload: &JWSPayload) -> R
             match algorithm {
                 Algorithm::BLS12381G2 => {
                     let mut messages: Vec<SignatureMessage> = Vec::new();
+                    eprintln!("signature generation, header: {}", &payload.header);
                     messages.push(SignatureMessage::hash(payload.header.as_bytes()));
-                    messages.push(SignatureMessage::hash(payload.sigopts_digest.as_ref().to_vec()));
+                    let sigopts_str = base64::encode(&payload.sigopts_digest);
+                    eprintln!("signature generation, sigopts: {}", sigopts_str.as_str());
+                    messages.push(SignatureMessage::hash(payload.sigopts_digest.as_ref()));
+
+                    eprintln!("signature generation, number of messages: {}", payload.messages.len());
 
                     for i in 0..payload.messages.len() {
-                        messages.push(SignatureMessage::hash(payload.messages[i].as_bytes()));
+                        let message = payload.messages[i].as_bytes();
+                        eprintln!("signature generation, message, {} {}", &i, base64::encode(message));
+                        messages.push(SignatureMessage::hash(message));
+                    }
+
+                    let mut num_messages = payload.messages.len() + 2;
+                    while num_messages < 100 {  // todo this is hardcoded, maybe use config
+                        messages.push(SignatureMessage::hash(b""));
+                        num_messages += 1;
                     }
 
                     let Base64urlUInt(pk_bytes) = &okp.public_key;
+                    eprintln!("signature generation, pk bytes: {}", base64::encode(pk_bytes));
                     let Base64urlUInt(sk_bytes) = okp.private_key.as_ref().unwrap();
                     let pk = bbs::prelude::PublicKey::try_from(pk_bytes.as_slice()).unwrap();
                     let sk = bbs::prelude::SecretKey::try_from(sk_bytes.as_slice()).unwrap();
@@ -104,6 +118,13 @@ pub fn sign_bytes_v2(algorithm: Algorithm, key: &JWK, payload: &JWSPayload) -> R
     let messages_str = payload.messages.join("");
     let messages_hash = sha256(messages_str.as_bytes());
     sign_bytes(algorithm, &messages_hash, key)
+}
+
+pub fn generate_proof_nonce() -> String {
+    let proof_nonce = Verifier::generate_proof_nonce();
+    let proof_nonce_bytes = proof_nonce.to_bytes_compressed_form();
+    let proof_nonce_str = base64::encode(proof_nonce_bytes.as_ref());
+    return proof_nonce_str;
 }
 
 pub fn sign_bytes(algorithm: Algorithm, data: &[u8], key: &JWK) -> Result<Vec<u8>, Error> {
@@ -385,24 +406,24 @@ pub fn verify_bytes_warnable(
                     }
                 },
                 _ => {
-                    #[cfg(feature = "ring")]
-                    {
-                        use ring::signature::UnparsedPublicKey;
-                        let verification_algorithm = &ring::signature::ED25519;
-                        let public_key = UnparsedPublicKey::new(verification_algorithm, &okp.public_key.0);
-                        public_key.verify(&hash, signature)?;
-                    }
-                    #[cfg(feature = "ed25519")]
-                    {
-                        use ed25519_dalek::Verifier;
-                        let public_key = ed25519_dalek::PublicKey::try_from(okp)?;
-                        let signature = ed25519_dalek::Signature::from_bytes(signature)
-                            .map_err(ssi_jwk::Error::from)?;
-                        public_key
-                            .verify(&hash, &signature)
-                            .map_err(ssi_jwk::Error::from)?;
-                    }
-                }
+            #[cfg(feature = "ring")]
+            {
+                use ring::signature::UnparsedPublicKey;
+                let verification_algorithm = &ring::signature::ED25519;
+                let public_key = UnparsedPublicKey::new(verification_algorithm, &okp.public_key.0);
+                public_key.verify(&hash, signature)?;
+            }
+            #[cfg(feature = "ed25519")]
+            {
+                use ed25519_dalek::Verifier;
+                let public_key = ed25519_dalek::PublicKey::try_from(okp)?;
+                let signature = ed25519_dalek::Signature::from_bytes(signature)
+                    .map_err(ssi_jwk::Error::from)?;
+                public_key
+                    .verify(&hash, &signature)
+                    .map_err(ssi_jwk::Error::from)?;
+            }
+        }
             }
         }
         #[allow(unused)]
@@ -612,11 +633,7 @@ pub fn detached_sign_unencoded_payload(
     Ok(jws)
 }
 
-pub fn detached_sign_unencoded_payload_v2(
-    algorithm: Algorithm,
-    payload: &mut JWSPayload,
-    key: &JWK,
-) -> Result<String, Error> {
+pub fn generate_header(algorithm: Algorithm, key: &JWK) -> Result<(Header, String), Error> {
     let header = Header {
         algorithm,
         key_id: key.key_id.clone(),
@@ -624,7 +641,16 @@ pub fn detached_sign_unencoded_payload_v2(
         base64urlencode_payload: Some(false),
         ..Default::default()
     };
-    let header_b64 = base64_encode_json(&header)?;
+    let header_str = base64_encode_json(&header)?;
+    Ok((header, header_str))
+}
+
+pub fn detached_sign_unencoded_payload_v2(
+    algorithm: Algorithm,
+    payload: &mut JWSPayload,
+    key: &JWK,
+) -> Result<String, Error> {
+    let (header, header_b64) = generate_header(algorithm, key)?;
     payload.header = header_b64;
     let sig_b64 = sign_bytes_b64_v2(header.algorithm, &key, payload)?;
     let jws = payload.header.clone() + ".." + &sig_b64;
