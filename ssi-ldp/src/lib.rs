@@ -578,7 +578,7 @@ pub async fn generate_bbs_signature_pok(
     nonce: &str,
     proof: &Proof,
     did_resolver: &dyn DIDResolver,
-    revealed_message_indices: &[usize]
+    selectors: &[&str]
 ) -> Result<Proof, Error> {
     let signature_with_header = proof.jws.as_ref().ok_or(Error::MissingProofSignature)?.as_str();
     let verification_method = proof
@@ -605,8 +605,8 @@ pub async fn generate_bbs_signature_pok(
     let mut context_loader = ssi_json_ld::ContextLoader::default();
     let payload = to_jws_payload_v2(document, &proof_without_jws, &mut context_loader).await?;
     let (header, header_str) = ssi_jws::generate_header(Algorithm::BLS12381G2, &key).unwrap();
-    println!("Header: {}", &header_str);
-    println!("Signature with header: {}", signature_with_header);
+    eprintln!("Header: {}", &header_str);
+    eprintln!("Signature with header: {}", signature_with_header);
 
     let start_index = signature_with_header.find("..").unwrap() + 2;  // +2 for ..; todo: switch to ok_or
     let signature_str = &signature_with_header[start_index..];
@@ -620,8 +620,8 @@ pub async fn generate_bbs_signature_pok(
     }
     let signature = Signature::from(&signature_bytes);
 
-    use std::collections::HashSet;
-    let disclose_positions: HashSet<usize> = HashSet::from_iter(revealed_message_indices.iter().cloned());
+    //use std::collections::HashSet;
+    //let disclose_positions: HashSet<usize> = HashSet::from_iter(revealed_message_indices.iter().cloned());
 
     let mut proof_messages: Vec<ProofMessage> = Vec::new();
     proof_messages.push(bbs::pm_hidden!(header_str.as_bytes()));
@@ -632,10 +632,24 @@ pub async fn generate_bbs_signature_pok(
 
     eprintln!("signature pok, number of messages: {}", payload.messages.len());
 
+    let mut revealed_message_indices = Vec::new();
     for i in 0..payload.messages.len() {
         let message_bytes = payload.messages[i].as_bytes();
+
+        let mut disclose = false;
+        for j in 0..selectors.len() {
+            let s = selectors[j];
+            let m = payload.messages[i].as_str();
+            let needle = format!("/{}>", s);
+            if m.contains(needle.as_str()) {
+                disclose = true;
+                break;
+            }
+        }
+
         eprintln!("signature, pok, message: {}, {}", &i, base64::encode(message_bytes));
-        if disclose_positions.contains(&i) {
+        if disclose {
+            revealed_message_indices.push(i);
             let pm = bbs::pm_revealed!(message_bytes);
             proof_messages.push(pm);
         } else {
@@ -650,10 +664,8 @@ pub async fn generate_bbs_signature_pok(
         num_messages += 1;
     }
 
-    eprintln!("done building inputs, now doing signature pok");
-
     // todo replace with actual disclosed message positions
-    let proof_request = Verifier::new_proof_request(revealed_message_indices, &pk).unwrap();
+    let proof_request = Verifier::new_proof_request(revealed_message_indices.as_slice(), &pk).unwrap();
     let pok = Prover::commit_signature_pok(&proof_request, proof_messages.as_slice(), &signature).unwrap();
 
     let mut challenge_bytes = Vec::new();
@@ -661,13 +673,15 @@ pub async fn generate_bbs_signature_pok(
     let nonce_bytes = base64::decode(nonce).unwrap();
     challenge_bytes.extend_from_slice(nonce_bytes.as_slice());
     eprintln!("size of challenge bytes: {}", challenge_bytes.len());
+    let challenge = ProofChallenge::hash(&challenge_bytes);
 
-    let challenge = ProofChallenge::hash(&challenge_bytes); 
-    let proof = Prover::generate_signature_pok(pok, &challenge).unwrap();
+    let bbs_proof = Prover::generate_signature_pok(pok, &challenge).unwrap();
+    let bbs_proof_bytes = bbs_proof.to_bytes_compressed_form();
+    let bbs_proof_str = base64::encode_config(bbs_proof_bytes.as_slice(), base64::URL_SAFE_NO_PAD);
 
-    // todo: create a proof object
-        
-    unimplemented!();
+    let mut proof_with_new_sig = proof.clone();
+    proof_with_new_sig.jws = Some(bbs_proof_str);
+    Ok(proof_with_new_sig)
 }
 
 async fn to_jws_payload_v2(

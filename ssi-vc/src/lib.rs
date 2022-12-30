@@ -1804,7 +1804,7 @@ fn print_elements(v: &Value, selectors: &Vec<&str>) {
     }
 }
 
-fn select_fields(subject: &CredentialSubject, selectors: &Vec<&str>) -> Map<String, Value> {
+fn select_fields(subject: &CredentialSubject, selectors: &[&str]) -> Map<String, Value> {
     let mut selected = Map::new();
 
     match &subject.property_set {
@@ -1826,7 +1826,7 @@ fn select_fields(subject: &CredentialSubject, selectors: &Vec<&str>) -> Map<Stri
 pub async fn derive_credential(
     document: &Credential,
     proof_nonce: &str,
-    selectors: &Vec<&str>,
+    selectors: &[&str],
     did_resolver: &dyn DIDResolver
 ) -> Result<Credential, Error> {
     use ssi_ldp::error::Error;
@@ -1873,7 +1873,7 @@ pub async fn derive_credential(
     // todo may need to add proof options and so on
     // todo revealed message indices
     // make sure to pass in the orignal document, which has all the messages
-    let proof = ssi_ldp::generate_bbs_signature_pok(document, proof_nonce, &proof, did_resolver, &[0]).await?;
+    let proof = ssi_ldp::generate_bbs_signature_pok(document, proof_nonce, &proof, did_resolver, selectors).await?;
     derived_credential.add_proof(proof);
 
     Ok(derived_credential)
@@ -1910,7 +1910,7 @@ pub async fn derive_credential_old(
 
         for i in 0..selected_statements.len() {
             let text = String::from(&selected_statements[i]);
-            println!("selected statement: {}", &text);
+            eprintln!("selected statement: {}", &text);
         }
 }
 
