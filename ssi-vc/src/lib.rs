@@ -1804,14 +1804,14 @@ fn print_elements(v: &Value, selectors: &Vec<&str>) {
     }
 }
 
-fn select_fields(subject: &CredentialSubject, selectors: &[&str]) -> Map<String, Value> {
+fn select_fields(subject: &CredentialSubject, selectors: &[String]) -> Map<String, Value> {
     let mut selected = Map::new();
 
     match &subject.property_set {
         Some(properties) => {
             for (k, v) in properties {
                 for i in 0..selectors.len() {
-                    if k == selectors[i] {
+                    if k.as_str() == selectors[i].as_str() {
                         selected.insert(k.clone(), v.clone());
                     }
                 }
@@ -1826,7 +1826,7 @@ fn select_fields(subject: &CredentialSubject, selectors: &[&str]) -> Map<String,
 pub async fn derive_credential(
     document: &Credential,
     proof_nonce: &str,
-    selectors: &[&str],
+    selectors: &[String],
     did_resolver: &dyn DIDResolver
 ) -> Result<Credential, Error> {
     use ssi_ldp::error::Error;

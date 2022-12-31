@@ -578,7 +578,7 @@ pub async fn generate_bbs_signature_pok(
     nonce: &str,
     proof: &Proof,
     did_resolver: &dyn DIDResolver,
-    selectors: &[&str]
+    selectors: &[String]
 ) -> Result<Proof, Error> {
     let signature_with_header = proof.jws.as_ref().ok_or(Error::MissingProofSignature)?.as_str();
     let verification_method = proof
@@ -638,7 +638,7 @@ pub async fn generate_bbs_signature_pok(
 
         let mut disclose = false;
         for j in 0..selectors.len() {
-            let s = selectors[j];
+            let s = selectors[j].as_str();
             let m = payload.messages[i].as_str();
             let needle = format!("/{}>", s);
             if m.contains(needle.as_str()) {
