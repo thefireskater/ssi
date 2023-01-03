@@ -149,7 +149,7 @@ impl LinkedDataDocument for Proof {
     async fn to_dataset_for_signing(
         &self,
         parent: Option<&(dyn LinkedDataDocument + Sync)>,
-        context_loader: &mut ContextLoader,
+        context_loader: &mut ContextLoader
     ) -> Result<DataSet, Error> {
         let mut copy = self.clone();
         copy.jws = None;
@@ -159,8 +159,14 @@ impl LinkedDataDocument for Proof {
             Some(parent) => parent.get_contexts()?,
             None => None,
         };
+
+        let stable_blank_node_labels = match copy.type_.as_str() {
+            "BbsBlsSignatureProof2020" => true,
+            _ => false
+        };
+
         let dataset =
-            json_to_dataset(&json, more_contexts.as_ref(), false, None, context_loader).await?;
+            json_to_dataset(&json, more_contexts.as_ref(), false, None, context_loader, stable_blank_node_labels).await?;
         verify_proof_consistency(self, &dataset)?;
         Ok(dataset)
     }

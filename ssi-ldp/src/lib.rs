@@ -735,10 +735,7 @@ async fn sign(
             return Err(Error::JWS(ssi_jws::Error::AlgorithmMismatch));
         }
     }
-    eprintln!("type: {}", type_);
     let options_str = serde_json::to_string(options).unwrap();
-    eprintln!("options: {}", options_str.as_str());
-    // pretty sure extra_proof_properties is None in this case
     let proof = Proof::new(type_)
         .with_options(options)
         .with_properties(extra_proof_properties);

@@ -222,7 +222,7 @@ where
             Some(parent) => parent.get_contexts()?,
             None => None,
         };
-        Ok(json_to_dataset(&json, more_contexts.as_ref(), false, None, context_loader).await?)
+        Ok(json_to_dataset(&json, more_contexts.as_ref(), false, None, context_loader, false).await?)
     }
 
     fn to_value(&self) -> Result<Value, LdpError> {
@@ -378,7 +378,7 @@ where
             Some(parent) => parent.get_contexts()?,
             None => None,
         };
-        Ok(json_to_dataset(&json, more_contexts.as_ref(), false, None, context_loader).await?)
+        Ok(json_to_dataset(&json, more_contexts.as_ref(), false, None, context_loader, false).await?)
     }
 
     fn to_value(&self) -> Result<Value, LdpError> {

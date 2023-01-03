@@ -1094,7 +1094,7 @@ impl LinkedDataDocument for Credential {
             Some(parent) => parent.get_contexts()?,
             None => None,
         };
-        Ok(json_to_dataset(&json, more_contexts.as_ref(), false, None, context_loader).await?)
+        Ok(json_to_dataset(&json, more_contexts.as_ref(), false, None, context_loader, false).await?)
     }
 
     fn to_value(&self) -> Result<Value, LdpError> {
@@ -1694,7 +1694,7 @@ impl LinkedDataDocument for Presentation {
             Some(parent) => parent.get_contexts()?,
             None => None,
         };
-        Ok(json_to_dataset(&json, more_contexts.as_ref(), false, None, context_loader).await?)
+        Ok(json_to_dataset(&json, more_contexts.as_ref(), false, None, context_loader, false).await?)
     }
 
     fn to_value(&self) -> Result<Value, LdpError> {
