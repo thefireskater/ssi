@@ -1094,7 +1094,15 @@ impl LinkedDataDocument for Credential {
             Some(parent) => parent.get_contexts()?,
             None => None,
         };
-        Ok(json_to_dataset(&json, more_contexts.as_ref(), false, None, context_loader, false).await?)
+        Ok(json_to_dataset(
+            &json,
+            more_contexts.as_ref(),
+            false,
+            None,
+            context_loader,
+            false,
+        )
+        .await?)
     }
 
     fn to_value(&self) -> Result<Value, LdpError> {
@@ -1694,7 +1702,15 @@ impl LinkedDataDocument for Presentation {
             Some(parent) => parent.get_contexts()?,
             None => None,
         };
-        Ok(json_to_dataset(&json, more_contexts.as_ref(), false, None, context_loader, false).await?)
+        Ok(json_to_dataset(
+            &json,
+            more_contexts.as_ref(),
+            false,
+            None,
+            context_loader,
+            false,
+        )
+        .await?)
     }
 
     fn to_value(&self) -> Result<Value, LdpError> {
@@ -1794,7 +1810,7 @@ fn print_elements(v: &Value, selectors: &Vec<&str>) {
             for i in 0..x.len() {
                 print_elements(&x[i], selectors);
             }
-        },
+        }
         Value::Object(x) => {
             for (k, v) in x {
                 println!("key = {}", k);
@@ -1816,8 +1832,8 @@ fn select_fields(subject: &CredentialSubject, selectors: &[String]) -> Map<Strin
                     }
                 }
             }
-        },
-        None => ()
+        }
+        None => (),
     }
 
     selected
@@ -1827,19 +1843,19 @@ pub async fn derive_credential(
     document: &Credential,
     proof_nonce: &str,
     selectors: &[String],
-    did_resolver: &dyn DIDResolver
+    did_resolver: &dyn DIDResolver,
 ) -> Result<Credential, Error> {
-    use ssi_ldp::error::Error;
-    use ssi_jwk::{Params as JWKParams, JWK, OctetParams, Base64urlUInt};
     use bbs::prelude::*;
+    use ssi_jwk::{Base64urlUInt, OctetParams, Params as JWKParams, JWK};
+    use ssi_ldp::error::Error;
 
     let mut derived_credential = document.clone();
-    
+
     let proofs = derived_credential.proof.unwrap();
 
     let proof = match proofs {
         OneOrMany::One(proof) => proof,
-        OneOrMany::Many(_) => unimplemented!(),  // todo: handle multiple proof case
+        OneOrMany::Many(_) => unimplemented!(), // todo: handle multiple proof case
     };
 
     // before zeroing this out, this is needed to generate the proof
@@ -1852,7 +1868,7 @@ pub async fn derive_credential(
             let mut new_subject = subject.clone();
             new_subject.property_set = Some(selected_fields);
             derived_credential.credential_subject = OneOrMany::One(new_subject);
-        },
+        }
         OneOrMany::Many(subjects) => {
             let mut new_subjects: Vec<CredentialSubject> = Vec::new();
 
@@ -1873,7 +1889,9 @@ pub async fn derive_credential(
     // todo may need to add proof options and so on
     // todo revealed message indices
     // make sure to pass in the orignal document, which has all the messages
-    let proof = ssi_ldp::generate_bbs_signature_pok(document, proof_nonce, &proof, did_resolver, selectors).await?;
+    let proof =
+        ssi_ldp::generate_bbs_signature_pok(document, proof_nonce, &proof, did_resolver, selectors)
+            .await?;
     derived_credential.add_proof(proof);
 
     Ok(derived_credential)
@@ -1882,36 +1900,40 @@ pub async fn derive_credential(
 pub async fn derive_credential_old(
     document: &Credential,
     context_loader: &mut ContextLoader,
-    selectors: &Vec<&str>) {
-        let derived_credential = document.clone();
+    selectors: &Vec<&str>,
+) {
+    let derived_credential = document.clone();
 
-        use ssi_json_ld::rdf::{Predicate, IRIRef, Statement};
+    use ssi_json_ld::rdf::{IRIRef, Predicate, Statement};
 
-        let dataset = document.to_dataset_for_signing(None, context_loader).await.unwrap();
-        let statements = dataset.statements();
-        let mut selected_statements: Vec<Statement> = Vec::new();
+    let dataset = document
+        .to_dataset_for_signing(None, context_loader)
+        .await
+        .unwrap();
+    let statements = dataset.statements();
+    let mut selected_statements: Vec<Statement> = Vec::new();
 
-        for i in 0..statements.len() {
-            let predicate = &statements[i].predicate;
-            match predicate {
-                Predicate::IRIRef(iri_ref) => {
-                    let IRIRef(text) = iri_ref;
-                    
-                    for j in 0..selectors.len() {
-                        let simple_selector = "/".to_owned() + selectors[j];
-                        if text.ends_with(&simple_selector) {
-                            selected_statements.push(statements[i].clone());
-                            break;
-                        }
+    for i in 0..statements.len() {
+        let predicate = &statements[i].predicate;
+        match predicate {
+            Predicate::IRIRef(iri_ref) => {
+                let IRIRef(text) = iri_ref;
+
+                for j in 0..selectors.len() {
+                    let simple_selector = "/".to_owned() + selectors[j];
+                    if text.ends_with(&simple_selector) {
+                        selected_statements.push(statements[i].clone());
+                        break;
                     }
                 }
             }
         }
+    }
 
-        for i in 0..selected_statements.len() {
-            let text = String::from(&selected_statements[i]);
-            eprintln!("selected statement: {}", &text);
-        }
+    for i in 0..selected_statements.len() {
+        let text = String::from(&selected_statements[i]);
+        eprintln!("selected statement: {}", &text);
+    }
 }
 
 #[cfg(test)]

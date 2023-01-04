@@ -10,8 +10,8 @@ pub mod error;
 pub use error::Error;
 pub mod context;
 pub mod soltx;
-pub use context::Context;
 use bbs::prelude::*;
+pub use context::Context;
 
 #[cfg(feature = "eip")]
 pub mod eip712;
@@ -246,12 +246,11 @@ fn pick_proof_suite<'a, 'b>(
                     _ => feature_gate!("secp256k1", EcdsaSecp256k1RecoverySignature2020),
                 }
             }
-        },
-        Algorithm::BLS12381G2 =>
-        {
+        }
+        Algorithm::BLS12381G2 => {
             // todo use feature_gate
             &BbsBlsSignatureProof2020
-        },
+        }
         _ => return Err(Error::ProofTypeNotImplemented),
     })
 }
@@ -578,9 +577,13 @@ pub async fn generate_bbs_signature_pok(
     nonce: &str,
     proof: &Proof,
     did_resolver: &dyn DIDResolver,
-    selectors: &[String]
+    selectors: &[String],
 ) -> Result<Proof, Error> {
-    let signature_with_header = proof.jws.as_ref().ok_or(Error::MissingProofSignature)?.as_str();
+    let signature_with_header = proof
+        .jws
+        .as_ref()
+        .ok_or(Error::MissingProofSignature)?
+        .as_str();
     let verification_method = proof
         .verification_method
         .as_ref()
@@ -590,13 +593,13 @@ pub async fn generate_bbs_signature_pok(
     // this is where the JWK is coming from
     let key = ssi_dids::did_resolve::resolve_key(verification_method, did_resolver).await?;
 
-    use ssi_jwk::{Params as JWKParams};
+    use ssi_jwk::Params as JWKParams;
     let pk = match &key.params {
         JWKParams::OKP(okp) => {
             let Base64urlUInt(pk_bytes) = &okp.public_key;
             eprintln!("signature pok, pk bytes: {}", base64::encode(pk_bytes));
             PublicKey::try_from(pk_bytes.as_slice()).unwrap()
-        },
+        }
         _ => unimplemented!(),
     };
 
@@ -608,29 +611,25 @@ pub async fn generate_bbs_signature_pok(
     eprintln!("Header: {}", &header_str);
     eprintln!("Signature with header: {}", signature_with_header);
 
-    let start_index = signature_with_header.find("..").unwrap() + 2;  // +2 for ..; todo: switch to ok_or
+    let start_index = signature_with_header.find("..").unwrap() + 2; // +2 for ..; todo: switch to ok_or
     let signature_str = &signature_with_header[start_index..];
 
     let signature_byte_vec = base64::decode_config(signature_str, base64::URL_SAFE_NO_PAD).unwrap();
-    assert!(signature_byte_vec.len() == 112, "Unexpected length for signature byte vector: {}", signature_byte_vec.len());
-    eprintln!("length of de-serialized signature vector: {}", signature_byte_vec.len());
+    assert!(
+        signature_byte_vec.len() == 112,
+        "Unexpected length for signature byte vector: {}",
+        signature_byte_vec.len()
+    );
     let mut signature_bytes: [u8; 112] = [0; 112];
     for i in 0..112 {
         signature_bytes[i] = signature_byte_vec[i];
     }
     let signature = Signature::from(&signature_bytes);
 
-    //use std::collections::HashSet;
-    //let disclose_positions: HashSet<usize> = HashSet::from_iter(revealed_message_indices.iter().cloned());
-
     let mut proof_messages: Vec<ProofMessage> = Vec::new();
     proof_messages.push(bbs::pm_hidden!(header_str.as_bytes()));
-    eprintln!("signature pok, header: {}", &header_str);
     let sigopts_str = base64::encode(&payload.sigopts_digest);
-    eprintln!("signature pok, sigopts: {}", sigopts_str.as_str());
     proof_messages.push(bbs::pm_hidden!(payload.sigopts_digest.as_ref()));
-
-    eprintln!("signature pok, number of messages: {}", payload.messages.len());
 
     let mut revealed_message_indices = Vec::new();
     for i in 0..payload.messages.len() {
@@ -647,7 +646,6 @@ pub async fn generate_bbs_signature_pok(
             }
         }
 
-        eprintln!("signature, pok, message: {}, {}", &i, base64::encode(message_bytes));
         if disclose {
             revealed_message_indices.push(i);
             let pm = bbs::pm_revealed!(message_bytes);
@@ -664,9 +662,10 @@ pub async fn generate_bbs_signature_pok(
         num_messages += 1;
     }
 
-    // todo replace with actual disclosed message positions
-    let proof_request = Verifier::new_proof_request(revealed_message_indices.as_slice(), &pk).unwrap();
-    let pok = Prover::commit_signature_pok(&proof_request, proof_messages.as_slice(), &signature).unwrap();
+    let proof_request =
+        Verifier::new_proof_request(revealed_message_indices.as_slice(), &pk).unwrap();
+    let pok = Prover::commit_signature_pok(&proof_request, proof_messages.as_slice(), &signature)
+        .unwrap();
 
     let mut challenge_bytes = Vec::new();
     challenge_bytes.extend_from_slice(pok.to_bytes().as_slice());
@@ -692,7 +691,7 @@ async fn to_jws_payload_v2(
     let mut payload = JWSPayload {
         header: String::new(),
         messages: Vec::new(),
-        sigopts_digest: [0; 32]
+        sigopts_digest: [0; 32],
     };
 
     let sigopts_dataset = proof
@@ -716,8 +715,6 @@ async fn to_jws_payload_v2(
 
     Ok(payload)
 }
-
-
 
 #[allow(clippy::too_many_arguments)]
 async fn sign(

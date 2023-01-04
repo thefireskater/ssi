@@ -577,7 +577,7 @@ pub struct BlankNodeIdentifierGenerator {
     pub identifier_map: Map<String, JsonValue>,
     pub counter: u64,
     pub path: Vec<String>,
-    pub stable: bool
+    pub stable: bool,
 }
 
 impl BlankNodeIdentifierGenerator {
@@ -603,9 +603,10 @@ impl BlankNodeIdentifierGenerator {
         let new_id = match self.stable {
             true => {
                 let suffix_str = self.path.join(",");
-                let suffix_digest = hex::encode(ssi_crypto::hashes::sha256::sha256(suffix_str.as_bytes()));
+                let suffix_digest =
+                    hex::encode(ssi_crypto::hashes::sha256::sha256(suffix_str.as_bytes()));
                 blank_node_id_prefix.to_string() + &suffix_digest
-            },
+            }
             false => blank_node_id_prefix.to_string() + &self.counter.to_string(),
         };
         self.counter += 1;
@@ -629,7 +630,7 @@ pub fn generate_node_map(
     list: Option<&mut JsonValue>,
     blank_node_id_generator: &mut BlankNodeIdentifierGenerator,
     depth: i32,
-    path: &mut Vec<String>
+    path: &mut Vec<String>,
 ) -> Result<(), Error> {
     let mut null: JsonValue = JsonValue::Null;
     let list = list.unwrap_or(&mut null);
@@ -647,7 +648,7 @@ pub fn generate_node_map(
                     Some(list),
                     blank_node_id_generator,
                     depth + 1,
-                    path
+                    path,
                 )?;
             }
             return Ok(());
@@ -752,7 +753,7 @@ pub fn generate_node_map(
             Some(&mut result),
             blank_node_id_generator,
             depth + 1,
-            path
+            path,
         )?;
         if list.is_null() {
             // 5.3
@@ -959,7 +960,7 @@ pub fn generate_node_map(
                         None,
                         blank_node_id_generator,
                         depth + 1,
-                        path
+                        path,
                     )?;
                 }
             }
@@ -979,7 +980,7 @@ pub fn generate_node_map(
                 None,
                 blank_node_id_generator,
                 depth + 1,
-                path
+                path,
             )?;
         }
         // 6.11
@@ -993,7 +994,7 @@ pub fn generate_node_map(
                 None,
                 blank_node_id_generator,
                 depth + 1,
-                path
+                path,
             )?;
         }
         // 6.12
@@ -1040,7 +1041,7 @@ pub fn generate_node_map(
                 None,
                 blank_node_id_generator,
                 depth + 1,
-                path
+                path,
             )?;
             blank_node_id_generator.path.pop();
         }
@@ -1832,7 +1833,7 @@ pub async fn json_to_dataset<T>(
     lax: bool,
     options: Option<&JsonLdOptions>,
     loader: &mut T,
-    stable_blank_node_labels: bool
+    stable_blank_node_labels: bool,
 ) -> Result<DataSet, Error>
 where
     T: Loader<Document = JsonValue> + std::marker::Send + Sync,
@@ -1859,7 +1860,7 @@ where
             None,
             &mut blank_node_id_generator,
             0,
-            &mut path
+            &mut path,
         )?;
     }
     let mut dataset = DataSet::default();

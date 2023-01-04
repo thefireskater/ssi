@@ -3,7 +3,7 @@ use async_trait::async_trait;
 use serde_json::Value;
 use ssi_dids::did_resolve::{resolve_key, resolve_vm, DIDResolver};
 use ssi_json_ld::ContextLoader;
-use ssi_jwk::{Algorithm, Params as JWKParams, JWK, OctetParams};
+use ssi_jwk::{Algorithm, Params as JWKParams, JWK};
 use std::collections::HashMap as Map;
 
 #[cfg(feature = "rsa")]
@@ -671,7 +671,7 @@ impl ProofSuite for BbsBlsSignatureProof2020 {
         } = ssi_jws::decode_jws_parts(header_b64, &message, signature_b64)?;
         // Redundant early algorithm check before expensive key lookup and signature verification.
         // todo bring below back
-        //self.validate_algorithm(header.algorithm)?; 
+        //self.validate_algorithm(header.algorithm)?;
         let key = resolve_key(verification_method, resolver).await?;
         // todo bring below back
         //self.validate_key_and_algorithm(&key, header.algorithm)?;

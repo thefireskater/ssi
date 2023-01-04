@@ -6,8 +6,8 @@ use std::convert::TryFrom;
 use std::result::Result;
 use zeroize::Zeroize;
 pub mod error;
-pub use error::Error;
 use bbs::prelude::*;
+pub use error::Error;
 
 #[cfg(feature = "ripemd-160")]
 pub mod ripemd160;
@@ -348,7 +348,7 @@ impl JWK {
         let params = Params::OKP(OctetParams {
             curve: "Bls12381G2".to_string(),
             public_key: Base64urlUInt(pk_bytes),
-            private_key: Some(Base64urlUInt(sk_bytes))
+            private_key: Some(Base64urlUInt(sk_bytes)),
         });
 
         Ok(JWK::from(params))
